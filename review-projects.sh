@@ -116,5 +116,5 @@ while true; do
   done
 
   log "--- Review cycle complete. Sleeping ${REVIEW_INTERVAL_SECONDS}s ---"
-  sleep "$REVIEW_INTERVAL_SECONDS"
+  sleep "$REVIEW_INTERVAL_SECONDS" || true
 done
