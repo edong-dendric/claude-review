@@ -6,9 +6,10 @@
 set -euo pipefail
 
 # === CONFIGURATION ===
-REVIEW_INTERVAL_SECONDS=86400  # 24 hours
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PROJECTS_FILE="$SCRIPT_DIR/projects.json"
+PLIST_LABEL="com.claude-review"
+PLIST_PATH="$HOME/Library/LaunchAgents/${PLIST_LABEL}.plist"
 
 # Read project directories from projects.json
 if [ ! -f "$PROJECTS_FILE" ]; then
@@ -105,16 +106,48 @@ review_project() {
   fi
 }
 
-# === MAIN LOOP ===
-log "=== Claude Review daemon started ==="
+# === LAUNCHD SETUP ===
+ensure_launchd() {
+  if [ -f "$PLIST_PATH" ]; then
+    return
+  fi
 
-while true; do
-  log "--- Starting review cycle ---"
+  log "Creating launchd plist at $PLIST_PATH"
+  cat > "$PLIST_PATH" <<PLIST
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>${PLIST_LABEL}</string>
+    <key>ProgramArguments</key>
+    <array>
+        <string>open</string>
+        <string>${SCRIPT_DIR}/launch-review.command</string>
+    </array>
+    <key>StartInterval</key>
+    <integer>86400</integer>
+    <key>RunAtLoad</key>
+    <true/>
+    <key>StandardOutPath</key>
+    <string>${SCRIPT_DIR}/launchd-stdout.log</string>
+    <key>StandardErrorPath</key>
+    <string>${SCRIPT_DIR}/launchd-stderr.log</string>
+</dict>
+</plist>
+PLIST
 
-  for project in "${PROJECTS[@]}"; do
-    review_project "$project"
-  done
+  launchctl load "$PLIST_PATH"
+  log "Loaded launchd agent: $PLIST_LABEL (runs every 24h)"
+}
 
-  log "--- Review cycle complete. Sleeping ${REVIEW_INTERVAL_SECONDS}s ---"
-  sleep "$REVIEW_INTERVAL_SECONDS" || true
+# === MAIN ===
+ensure_launchd
+
+log "--- Starting review cycle ---"
+
+for project in "${PROJECTS[@]}"; do
+  review_project "$project"
 done
+
+log "--- Review cycle complete ---"
