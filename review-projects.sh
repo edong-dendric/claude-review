@@ -25,6 +25,21 @@ log() {
   echo "[$(date '+%Y-%m-%d %H:%M:%S')] $*"
 }
 
+wait_for_auth() {
+  local max_attempts=10
+  local delay=30
+  for ((i=1; i<=max_attempts; i++)); do
+    if claude -p "ping" --max-turns 1 &>/dev/null; then
+      log "Auth ready"
+      return 0
+    fi
+    log "Auth not ready (attempt $i/$max_attempts), waiting ${delay}s..."
+    sleep "$delay"
+  done
+  log "ERROR: Auth never became ready after $((max_attempts * delay))s"
+  return 1
+}
+
 # The prompt sent to Claude Code for each project
 REVIEW_PROMPT='You are maintaining this project'\''s CLAUDE.md file. Your job is to keep it as a comprehensive, up-to-date reference covering: project purpose, architecture, tech stack, directory structure, code conventions, key patterns, and best practices.
 
@@ -143,6 +158,8 @@ PLIST
 
 # === MAIN ===
 ensure_launchd
+
+wait_for_auth || exit 1
 
 log "--- Starting review cycle ---"
 
